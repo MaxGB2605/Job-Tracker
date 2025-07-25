@@ -72,7 +72,8 @@ dependencies {
 
     implementation(libs.androidx.recyclerview)
 
-
-
+    // Swipe to delete decoration
+    // https://mvnrepository.com/artifact/it.xabaras.android/recyclerview-swipedecorator
+    implementation("it.xabaras.android:recyclerview-swipedecorator:1.4")
 
 }

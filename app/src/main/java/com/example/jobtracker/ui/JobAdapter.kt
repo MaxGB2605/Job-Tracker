@@ -1,5 +1,6 @@
 package com.example.jobtracker.ui
 
+import android.annotation.SuppressLint
 import com.example.jobtracker.R
 
 //noinspection SuspiciousImport
@@ -10,7 +11,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.jobtracker.data.JobApplication
 
-class JobAdapter(private val jobs: List<JobApplication>) :
+class JobAdapter(var jobs: MutableList<JobApplication>) :
     RecyclerView.Adapter<JobAdapter.JobViewHolder>() {
 
     class JobViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -36,4 +37,26 @@ class JobAdapter(private val jobs: List<JobApplication>) :
     }
 
     override fun getItemCount() = jobs.size
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun removeItem(newItems: List<JobApplication>) {
+        jobs = newItems.toMutableList()
+        notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setItems(newItems: List<JobApplication>) {
+        jobs = newItems.toMutableList()
+        notifyDataSetChanged()
+    }
+
+    fun getItemAt(position: Int): JobApplication {
+        return jobs[position]
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun updateItem(position: Int, item: JobApplication) {
+        jobs[position] = item
+        notifyItemChanged(position)
+    }
 }
