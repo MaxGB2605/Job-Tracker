@@ -21,6 +21,12 @@ import com.example.jobtracker.ui.JobAdapter
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import android.app.AlertDialog
+import android.view.LayoutInflater
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.datepicker.MaterialDatePicker
+import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,10 +130,7 @@ class MainActivity : ComponentActivity() {
         // Initialize views
         jobRecyclerView = findViewById(R.id.jobRecyclerView)
         searchInput = findViewById(R.id.searchInput)
-        jobTitleInput = findViewById(R.id.jobTitleInput)
-        companyInput = findViewById(R.id.companyInput)
-        dateInput = findViewById(R.id.dateInput)
-        val saveButton = findViewById<MaterialButton>(R.id.saveButton)
+        val fabAddJob = findViewById<FloatingActionButton>(R.id.fabAddJob)
 
         // Set up RecyclerView
         jobRecyclerView.layoutManager = LinearLayoutManager(this)
@@ -153,7 +156,6 @@ class MainActivity : ComponentActivity() {
         // Handle search button on keyboard
         searchInput.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                // Hide the keyboard
                 val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
                 imm.hideSoftInputFromWindow(searchInput.windowToken, 0)
                 true
@@ -162,29 +164,64 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Set up FAB click listener
+        fabAddJob.setOnClickListener {
+            showAddJobDialog()
+        }
+
         // Load jobs from database
         loadJobs()
+    }
 
-        // Set up save button click listener
+    private fun showAddJobDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_add_job, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        // Initialize dialog views
+        val companyInput = dialogView.findViewById<TextInputEditText>(R.id.companyInputDialog)
+        val jobTitleInput = dialogView.findViewById<TextInputEditText>(R.id.jobTitleInputDialog)
+        val dateInput = dialogView.findViewById<TextInputEditText>(R.id.dateInputDialog)
+        val saveButton = dialogView.findViewById<MaterialButton>(R.id.saveButtonDialog)
+        val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+
+        // Set up date picker
+        dateInput.setOnClickListener {
+            val datePicker = MaterialDatePicker.Builder.datePicker()
+                .setTitleText("Select date")
+                .build()
+            
+            // Show the date picker using the correct FragmentManager
+            datePicker.show((this as AppCompatActivity).supportFragmentManager, MaterialDatePicker::class.java.canonicalName)
+            
+            datePicker.addOnPositiveButtonClickListener { selectedDate ->
+                dateInput.setText(Date(selectedDate).toString())
+            }
+        }
+
+        // Set up save button
         saveButton.setOnClickListener {
-            val title = jobTitleInput.text.toString().trim()
             val company = companyInput.text.toString().trim()
+            val jobTitle = jobTitleInput.text.toString().trim()
             val date = dateInput.text.toString().trim()
 
-            // Validate input
-            if (title.isEmpty() || company.isEmpty() || date.isEmpty()) {
+            if (company.isEmpty() || jobTitle.isEmpty() || date.isEmpty()) {
                 Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            val job = JobApplication(jobTitle = title, company = company, dateApplied = date)
+            val job = JobApplication(jobTitle = jobTitle, company = company, dateApplied = date)
             saveJob(job)
-
-            // Clear input fields
-            jobTitleInput.text?.clear()
-            companyInput.text?.clear()
-            dateInput.text?.clear()
+            dialog.dismiss()
         }
+
+        // Set up cancel button
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun saveJob(job: JobApplication) {
