@@ -4,4 +4,5 @@
     <string name="company_name">Company Name</string>
     <string name="date_applied">Date Applied</string>
     <string name="save_job">Save Job</string>
+    <string name="search_jobs">Search jobs...</string>
 </resources>
