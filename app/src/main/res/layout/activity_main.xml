@@ -4,7 +4,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="20dp">
+    android:padding="30dp">
+
+
+    <EditText
+        android:id="@+id/companyInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:autoSizeTextType="uniform"
+        android:autofillHints="company"
+        android:hint="@string/company_name"
+        android:minHeight="48dp" />
 
 
     <EditText
@@ -16,14 +26,7 @@
         android:hint="@string/job_title"
         android:minHeight="48dp" />
 
-    <EditText
-        android:id="@+id/companyInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:autoSizeTextType="uniform"
-        android:autofillHints="company"
-        android:hint="@string/company_name"
-        android:minHeight="48dp" />
+
 
     <EditText
         android:id="@+id/dateInput"

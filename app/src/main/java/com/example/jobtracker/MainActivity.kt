@@ -37,7 +37,7 @@ class MainActivity : ComponentActivity() {
             override fun onMove(
                 recyclerView: RecyclerView,
                 viewHolder: RecyclerView.ViewHolder,
-                target: RecyclerView.ViewHolder
+                target: RecyclerView.ViewHolder,
             ): Boolean {
                 return false
             }
@@ -45,7 +45,8 @@ class MainActivity : ComponentActivity() {
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
                 val job = jobAdapter.getItemAt(position)
-                deleteJob(job, position)
+                // deleteJob(job, position)
+                showDeleteConfirmation(job, position)
             }
 
             override fun onChildDraw(
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
                 dX: Float,
                 dY: Float,
                 actionState: Int,
-                isCurrentlyActive: Boolean
+                isCurrentlyActive: Boolean,
             ) {
                 val itemView = viewHolder.itemView
                 val background = ColorDrawable(Color.RED)
@@ -93,14 +94,21 @@ class MainActivity : ComponentActivity() {
                     background.setBounds(0, 0, 0, 0)
                 }
 
-                super.onChildDraw(c, recyclerView, viewHolder, dX, dY, actionState, isCurrentlyActive)
+                super.onChildDraw(
+                    c,
+                    recyclerView,
+                    viewHolder,
+                    dX,
+                    dY,
+                    actionState,
+                    isCurrentlyActive
+                )
             }
         }
 
         val itemTouchHelper = ItemTouchHelper(itemTouchHelperCallback)
         itemTouchHelper.attachToRecyclerView(jobRecyclerView)
     }
-
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,7 +128,7 @@ class MainActivity : ComponentActivity() {
         jobList = mutableListOf()  // Initialize the list
         jobAdapter = JobAdapter(jobList)
         jobRecyclerView.adapter = jobAdapter
-        
+
         // Set up swipe to delete
         setUpSwipeToDelete()
 
@@ -130,6 +138,13 @@ class MainActivity : ComponentActivity() {
             val title = findViewById<EditText>(R.id.jobTitleInput).text.toString()
             val company = findViewById<EditText>(R.id.companyInput).text.toString()
             val date = findViewById<EditText>(R.id.dateInput).text.toString()
+
+            //Added July 26, 2025 to validate that fields are not empty
+            if (company.isEmpty() || title.isEmpty() || date.isEmpty()) {
+                Toast.makeText(this@MainActivity, "Please fill in information", Toast.LENGTH_SHORT)
+                    .show()
+                return@setOnClickListener
+            }
 
             val job = JobApplication(jobTitle = title, company = company, dateApplied = date)
 
@@ -146,7 +161,6 @@ class MainActivity : ComponentActivity() {
         }
 
 
-
     }
 
     private fun saveJob(job: JobApplication) {
@@ -160,26 +174,71 @@ class MainActivity : ComponentActivity() {
     }
 
 
-    private fun deleteJob(job: JobApplication, position: Int){
-        lifecycleScope.launch{
-            db.jobDao().delete(job)
-            jobList.removeAt(position)
-            jobAdapter.notifyItemRemoved(position)
-            withContext(Dispatchers.Main){
-                Toast.makeText(applicationContext, "Job deleted", Toast.LENGTH_SHORT).show()
+    //Added July 26, 2025 delete confirmation
+    private fun showDeleteConfirmation(job: JobApplication, position: Int) {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Delete Job Application")
+            .setMessage("Are you sure you want to delete this job application?")
+            .setPositiveButton("Yes") { _, _ ->
+                deleteJob(job, position)
+            }
+            .setNegativeButton("No!") { dialog, _ ->
+                dialog.dismiss()
+                //Refresh the list to make sure item is in the list
+                jobAdapter.notifyItemChanged(position)
+            }
+            .show()
+    }
+
+
+    private fun deleteJob(job: JobApplication, position: Int) {
+        lifecycleScope.launch {
+            try {
+                //remove from database
+                db.jobDao().delete(job)
+
+                //update UI
+                withContext(Dispatchers.Main) {
+                    jobList.removeAt(position)
+                    jobAdapter.notifyItemRemoved(position)
+                    Toast.makeText(applicationContext, "Job Deleted!", Toast.LENGTH_SHORT).show()
+                    loadJobs()
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        applicationContext,
+                        "Error Deleting Job: ${e.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    loadJobs()
+                }
             }
         }
     }
 
+
+//    private fun deleteJob(job: JobApplication, position: Int) {
+//        lifecycleScope.launch {
+//            db.jobDao().delete(job)
+//            jobList.removeAt(position)
+//            jobAdapter.notifyItemRemoved(position)
+//            withContext(Dispatchers.Main) {
+//                Toast.makeText(applicationContext, "Job deleted", Toast.LENGTH_SHORT).show()
+//                loadJobs()
+//            }
+//        }
+//    }
+
     private fun loadJobs() {
-       lifecycleScope.launch{
-           val jobs = withContext(Dispatchers.IO){
-               db.jobDao().getAllJobs()
-           }
-           jobList.clear()
-           jobList.addAll(jobs)
-           jobAdapter.setItems(jobList)
-       }
+        lifecycleScope.launch {
+            val jobs = withContext(Dispatchers.IO) {
+                db.jobDao().getAllJobs()
+            }
+            jobList.clear()
+            jobList.addAll(jobs)
+            jobAdapter.setItems(jobList)
+        }
     }
 
 
