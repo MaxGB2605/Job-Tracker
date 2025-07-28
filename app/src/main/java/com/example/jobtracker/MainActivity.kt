@@ -1,49 +1,212 @@
 package com.example.jobtracker
 
+import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.jobtracker.data.ApplicationMethod
 import com.example.jobtracker.data.JobApplication
 import com.example.jobtracker.data.JobDatabase
+import com.example.jobtracker.databinding.ActivityMainBinding
 import com.example.jobtracker.ui.JobAdapter
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import android.app.AlertDialog
-import android.view.LayoutInflater
-import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.datepicker.MaterialDatePicker
-import java.util.Date
+import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private lateinit var binding: ActivityMainBinding
     private lateinit var db: JobDatabase
     private lateinit var jobRecyclerView: RecyclerView
     private lateinit var searchInput: TextInputEditText
-    private lateinit var jobTitleInput: TextInputEditText
-    private lateinit var companyInput: TextInputEditText
-    private lateinit var dateInput: TextInputEditText
-
-    private val TAG = "JobTracker"
-    private var jobList: MutableList<JobApplication> = mutableListOf()
+    private lateinit var fabAddJob: FloatingActionButton
     private lateinit var jobAdapter: JobAdapter
+    private var jobList: MutableList<JobApplication> = mutableListOf()
 
-    fun setUpSwipeToDelete() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+
+        // Initialize database
+        db = JobDatabase.getDatabase(this)
+
+        // Set up RecyclerView
+        jobRecyclerView = binding.jobRecyclerView
+        jobRecyclerView.layoutManager = LinearLayoutManager(this)
+        jobAdapter = JobAdapter(jobList)
+        jobRecyclerView.adapter = jobAdapter
+
+        // Set up search
+        searchInput = binding.searchInput
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                jobAdapter.filter(s.toString())
+            }
+        })
+
+        // Set up FAB
+        fabAddJob = binding.fabAddJob
+        fabAddJob.setOnClickListener {
+            showAddJobDialog()
+        }
+
+        // Load jobs
+        loadJobs()
+        
+        // Handle shared text intent
+        handleSharedText()
+    }
+
+    private fun handleSharedText() {
+        // Check if activity was started via a share intent
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
+            
+            // Try to extract job title and company from shared text
+            val (company, title) = extractJobDetails(sharedText)
+            
+            // Show the add job dialog with pre-filled info
+            showAddJobDialog(company, title)
+        }
+    }
+    
+    private fun extractJobDetails(text: String): Pair<String?, String?> {
+        // Common patterns for job sharing
+        val patterns = listOf(
+            // LinkedIn pattern: "Job Title at Company"
+            "(.+?) at (.+?)(?:\s*\||\s*\n|\s*\r|\s*https?://.*|\s*$".toRegex()
+        )
+        
+        for (pattern in patterns) {
+            val match = pattern.toRegex().find(text)
+            if (match != null && match.groupValues.size >= 3) {
+                return match.groupValues[1].trim() to match.groupValues[2].trim()
+            }
+        }
+        
+        // Fallback: Try to extract from common formats
+        val lines = text.lines().filter { it.isNotBlank() }
+        if (lines.size >= 2) {
+            // If we have multiple lines, assume first line is title, second is company
+            return lines[1].trim() to lines[0].trim()
+        }
+        
+        return null to null
+    }
+    
+    private fun showAddJobDialog(company: String? = null, title: String? = null) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_add_job, null)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .setCancelable(true)
+            .create()
+
+        // Initialize dialog views
+        val companyInput = dialogView.findViewById<TextInputEditText>(R.id.companyInputDialog)
+        val jobTitleInput = dialogView.findViewById<TextInputEditText>(R.id.jobTitleInputDialog)
+        val applicationMethodDropdown = dialogView.findViewById<AutoCompleteTextView>(R.id.applicationMethodDropdown)
+        val saveButton = dialogView.findViewById<MaterialButton>(R.id.saveButtonDialog)
+        val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
+        
+        // Pre-fill fields if data was provided
+        company?.let { companyInput.setText(it) }
+        title?.let { jobTitleInput.setText(it) }
+
+        // Set up application method dropdown
+        val applicationMethods = ApplicationMethod.values().map { 
+            it.name.replace("_", " ").lowercase().replaceFirstChar { char -> char.uppercase() }
+        }
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, applicationMethods)
+        applicationMethodDropdown.setAdapter(adapter)
+        applicationMethodDropdown.setText(applicationMethods[1], false) // Default to COMPANY_WEBSITE
+
+        saveButton.setOnClickListener {
+            val company = companyInput.text?.toString()?.trim()
+            val jobTitle = jobTitleInput.text?.toString()?.trim()
+            val selectedMethod = applicationMethodDropdown.text.toString()
+                .uppercase().replace(" ", "_")
+
+            if (company.isNullOrBlank() || jobTitle.isNullOrBlank()) {
+                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            try {
+                val applicationMethod = ApplicationMethod.valueOf(selectedMethod)
+                val job = JobApplication(
+                    jobTitle = jobTitle,
+                    company = company,
+                    applicationMethod = applicationMethod
+                )
+                saveJob(job)
+                dialog.dismiss()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Error saving job: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        cancelButton.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    private fun saveJob(job: JobApplication) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                db.jobDao().insert(job)
+            }
+            loadJobs()
+        }
+    }
+
+    private fun loadJobs() {
+        lifecycleScope.launch {
+            val jobs = withContext(Dispatchers.IO) {
+                db.jobDao().getAllJobs()
+            }
+            jobList.clear()
+            jobList.addAll(jobs)
+            jobAdapter.setItems(jobs)
+        }
+    }
+
+    private fun deleteJob(job: JobApplication) {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                db.jobDao().delete(job)
+            }
+
+            
+            loadJobs()
+        }
+    }
+
+    private fun setUpSwipeToDelete() {
         val itemTouchHelperCallback = object : ItemTouchHelper.SimpleCallback(
             0, ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
         ) {
@@ -58,7 +221,6 @@ class MainActivity : ComponentActivity() {
             override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
                 val position = viewHolder.adapterPosition
                 val job = jobAdapter.getItemAt(position)
-                // deleteJob(job, position)
                 showDeleteConfirmation(job, position)
             }
 
@@ -123,124 +285,12 @@ class MainActivity : ComponentActivity() {
         itemTouchHelper.attachToRecyclerView(jobRecyclerView)
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        // Initialize views
-        jobRecyclerView = findViewById(R.id.jobRecyclerView)
-        searchInput = findViewById(R.id.searchInput)
-        val fabAddJob = findViewById<FloatingActionButton>(R.id.fabAddJob)
-
-        // Set up RecyclerView
-        jobRecyclerView.layoutManager = LinearLayoutManager(this)
-        jobRecyclerView.setHasFixedSize(true)
-        jobAdapter = JobAdapter(jobList)
-        jobRecyclerView.adapter = jobAdapter
-
-        // Initialize database
-        db = JobDatabase.getDatabase(this)
-
-        // Set up swipe to delete
-        setUpSwipeToDelete()
-
-        // Set up search functionality
-        searchInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                jobAdapter.filter(s?.toString() ?: "")
-            }
-            override fun afterTextChanged(s: Editable?) {}
-        })
-
-        // Handle search button on keyboard
-        searchInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.hideSoftInputFromWindow(searchInput.windowToken, 0)
-                true
-            } else {
-                false
-            }
-        }
-
-        // Set up FAB click listener
-        fabAddJob.setOnClickListener {
-            showAddJobDialog()
-        }
-
-        // Load jobs from database
-        loadJobs()
-    }
-
-    private fun showAddJobDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_add_job, null)
-        val dialog = AlertDialog.Builder(this)
-            .setView(dialogView)
-            .create()
-
-        // Initialize dialog views
-        val companyInput = dialogView.findViewById<TextInputEditText>(R.id.companyInputDialog)
-        val jobTitleInput = dialogView.findViewById<TextInputEditText>(R.id.jobTitleInputDialog)
-        val dateInput = dialogView.findViewById<TextInputEditText>(R.id.dateInputDialog)
-        val saveButton = dialogView.findViewById<MaterialButton>(R.id.saveButtonDialog)
-        val cancelButton = dialogView.findViewById<MaterialButton>(R.id.cancelButton)
-
-        // Set up date picker
-        dateInput.setOnClickListener {
-            val datePicker = MaterialDatePicker.Builder.datePicker()
-                .setTitleText("Select date")
-                .build()
-            
-            // Show the date picker using the correct FragmentManager
-            datePicker.show((this as AppCompatActivity).supportFragmentManager, MaterialDatePicker::class.java.canonicalName)
-            
-            datePicker.addOnPositiveButtonClickListener { selectedDate ->
-                dateInput.setText(Date(selectedDate).toString())
-            }
-        }
-
-        // Set up save button
-        saveButton.setOnClickListener {
-            val company = companyInput.text.toString().trim()
-            val jobTitle = jobTitleInput.text.toString().trim()
-            val date = dateInput.text.toString().trim()
-
-            if (company.isEmpty() || jobTitle.isEmpty() || date.isEmpty()) {
-                Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val job = JobApplication(jobTitle = jobTitle, company = company, dateApplied = date)
-            saveJob(job)
-            dialog.dismiss()
-        }
-
-        // Set up cancel button
-        cancelButton.setOnClickListener {
-            dialog.dismiss()
-        }
-
-        dialog.show()
-    }
-
-    private fun saveJob(job: JobApplication) {
-        lifecycleScope.launch {
-            db.jobDao().insert(job)
-            loadJobs()
-            withContext(Dispatchers.Main) {
-                Toast.makeText(applicationContext, "Job Saved!", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    //Added July 26, 2025 delete confirmation
     private fun showDeleteConfirmation(job: JobApplication, position: Int) {
         android.app.AlertDialog.Builder(this)
             .setTitle("Delete Job Application")
             .setMessage("Are you sure you want to delete this job application?")
             .setPositiveButton("Yes") { _, _ ->
-                deleteJob(job, position)
+                deleteJob(job)
             }
             .setNegativeButton("No!") { dialog, _ ->
                 dialog.dismiss()
@@ -248,42 +298,5 @@ class MainActivity : ComponentActivity() {
                 jobAdapter.notifyItemChanged(position)
             }
             .show()
-    }
-
-    private fun deleteJob(job: JobApplication, position: Int) {
-        lifecycleScope.launch {
-            try {
-                //remove from database
-                db.jobDao().delete(job)
-
-                //update UI
-                withContext(Dispatchers.Main) {
-                    jobList.removeAt(position)
-                    jobAdapter.notifyItemRemoved(position)
-                    Toast.makeText(applicationContext, "Job Deleted!", Toast.LENGTH_SHORT).show()
-                    loadJobs()
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(
-                        applicationContext,
-                        "Error Deleting Job: ${e.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                    loadJobs()
-                }
-            }
-        }
-    }
-
-    private fun loadJobs() {
-        lifecycleScope.launch {
-            val jobs = withContext(Dispatchers.IO) {
-                db.jobDao().getAllJobs()
-            }
-            jobList.clear()
-            jobList.addAll(jobs)
-            jobAdapter.setItems(jobList)
-        }
     }
 }
