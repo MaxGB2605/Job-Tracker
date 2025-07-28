@@ -57,6 +57,9 @@ class MainActivity : ComponentActivity() {
         jobAdapter = JobAdapter(jobList)
         jobRecyclerView.adapter = jobAdapter
 
+        // Set up swipe to delete
+        setUpSwipeToDelete()
+
         // Set up search
         searchInput = binding.searchInput
         searchInput.addTextChangedListener(object : TextWatcher {
@@ -97,11 +100,11 @@ class MainActivity : ComponentActivity() {
         // Common patterns for job sharing
         val patterns = listOf(
             // LinkedIn pattern: "Job Title at Company"
-            "(.+?) at (.+?)(?:\s*\||\s*\n|\s*\r|\s*https?://|\s*$".toRegex(),
+            "(.+?) at (.+?)(?:\\s*\\||\\s*\\n|\\s*\\r|\\s*https?://|\\s*$)".toRegex(),
             // Common pattern: "Company: X, Title: Y"
-            "[Cc]ompany[\s:]+([^\n,]+)[,\s]*[Tt]itle[\s:]+([^\n,]+)".toRegex(),
+            "[Cc]ompany[\\s:]+([^\\n,]+)[,\\s]*[Tt]itle[\\s:]+([^\\n,]+)".toRegex(),
             // Common pattern: "Title: X, Company: Y"
-            "[Tt]itle[\s:]+([^\n,]+)[,\s]*[Cc]ompany[\s:]+([^\n,]+)".toRegex()
+            "[Tt]itle[\\s:]+([^\\n,]+)[,\\s]*[Cc]ompany[\\s:]+([^\\n,]+)".toRegex()
         )
         
         for (pattern in patterns) {
