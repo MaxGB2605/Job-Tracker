@@ -59,23 +59,25 @@
 
         </com.google.android.material.textfield.TextInputLayout>
 
-        <!-- Date Input -->
+        <!-- Application Method Dropdown -->
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-            android:focusable="false"
-            android:clickable="true"
-            app:startIconDrawable="@drawable/ic_calendar"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            app:startIconDrawable="@drawable/ic_link"
             app:startIconTint="?android:attr/textColorHint">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/dateInputDialog"
+            <AutoCompleteTextView
+                android:id="@+id/applicationMethodDropdown"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="@string/date_applied"
-                />
+                android:hint="@string/application_method"
+                android:inputType="none"
+
+                android:minHeight="48dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="16dp"/>
 
         </com.google.android.material.textfield.TextInputLayout>
 

@@ -9,4 +9,5 @@
     <string name="cancel">Cancel</string>
     <string name="please_fill_in_all_fields">Please fill in all fields</string>
     <string name="add_new_job_button">Add new job button</string>
+    <string name="application_method">Application Method</string>
 </resources>
