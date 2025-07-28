@@ -97,11 +97,15 @@ class MainActivity : ComponentActivity() {
         // Common patterns for job sharing
         val patterns = listOf(
             // LinkedIn pattern: "Job Title at Company"
-            "(.+?) at (.+?)(?:\s*\||\s*\n|\s*\r|\s*https?://.*|\s*$".toRegex()
+            "(.+?) at (.+?)(?:\s*\||\s*\n|\s*\r|\s*https?://|\s*$".toRegex(),
+            // Common pattern: "Company: X, Title: Y"
+            "[Cc]ompany[\s:]+([^\n,]+)[,\s]*[Tt]itle[\s:]+([^\n,]+)".toRegex(),
+            // Common pattern: "Title: X, Company: Y"
+            "[Tt]itle[\s:]+([^\n,]+)[,\s]*[Cc]ompany[\s:]+([^\n,]+)".toRegex()
         )
         
         for (pattern in patterns) {
-            val match = pattern.toRegex().find(text)
+            val match = pattern.find(text)
             if (match != null && match.groupValues.size >= 3) {
                 return match.groupValues[1].trim() to match.groupValues[2].trim()
             }
