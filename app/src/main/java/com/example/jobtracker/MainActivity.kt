@@ -33,6 +33,8 @@ import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
 
 class MainActivity : ComponentActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -88,16 +90,74 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
             
-            // Try to extract job title and company from shared text
-            val (company, title) = extractJobDetails(sharedText)
-            
-            // Show the add job dialog with pre-filled info
-            showAddJobDialog(company, title)
+            // Check if it's a LinkedIn job URL
+            if (sharedText.contains("linkedin.com/jobs/view", ignoreCase = true)) {
+                // Show loading state
+                Toast.makeText(this, "Fetching job details...", Toast.LENGTH_SHORT).show()
+                
+                // Fetch and parse the LinkedIn job page
+                lifecycleScope.launch {
+                    try {
+                        val (company, title) = fetchLinkedInJobDetails(sharedText)
+                        if (company != null && title != null) {
+                            runOnUiThread {
+                                showAddJobDialog(company, title)
+                            }
+                        } else {
+                            runOnUiThread {
+                                // Fallback to basic extraction if parsing fails
+                                val (fallbackCompany, fallbackTitle) = extractJobDetails(sharedText)
+                                showAddJobDialog(fallbackCompany, fallbackTitle)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Error fetching job details", Toast.LENGTH_SHORT).show()
+                            val (company, title) = extractJobDetails(sharedText)
+                            showAddJobDialog(company, title)
+                        }
+                    }
+                }
+            } else {
+                // For non-LinkedIn URLs or text, use the existing extraction
+                val (company, title) = extractJobDetails(sharedText)
+                showAddJobDialog(company, title)
+            }
+        }
+    }
+    
+    private suspend fun fetchLinkedInJobDetails(url: String): Pair<String?, String?> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val doc: Document = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                    .referrer("http://www.google.com")
+                    .get()
+                
+                // Extract job title
+                val titleElement = doc.selectFirst("h1.top-card-layout__title")
+                val title = titleElement?.text()?.trim()
+                
+                // Extract company name
+                val companyElement = doc.selectFirst("a.topcard__org-name-link")
+                val company = companyElement?.text()?.trim()
+                
+                company to title
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null to null
+            }
         }
     }
     
     private fun extractJobDetails(text: String): Pair<String?, String?> {
-        // Common patterns for job sharing
+        // If it's a LinkedIn job URL, return nulls to trigger the full fetch
+        if (text.contains("linkedin.com/jobs/view", ignoreCase = true)) {
+            return null to null
+        }
+        
+        // Existing extraction logic for non-URL text
         val patterns = listOf(
             // LinkedIn pattern: "Job Title at Company"
             "(.+?) at (.+?)(?:\\s*\\||\\s*\\n|\\s*\\r|\\s*https?://|\\s*$)".toRegex(),

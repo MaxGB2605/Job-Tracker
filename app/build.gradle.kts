@@ -77,5 +77,7 @@ dependencies {
     // Swipe to delete decoration
     // https://mvnrepository.com/artifact/it.xabaras.android/recyclerview-swipedecorator
     implementation("it.xabaras.android:recyclerview-swipedecorator:1.4")
-
+    
+    // Jsoup for HTML parsing
+    implementation("org.jsoup:jsoup:1.17.2")
 }
